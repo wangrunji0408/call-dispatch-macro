@@ -20,7 +20,7 @@ pub fn call_dispatch(args: TokenStream1, input: TokenStream1) -> TokenStream1 {
         .into()
 }
 
-fn call_dispatch2(args: CallDispatchArgs, input: &mut ItemImpl) -> Result<TokenStream> {
+fn call_dispatch2(_args: CallDispatchArgs, input: &mut ItemImpl) -> Result<TokenStream> {
     let calls = take_call_attributes(input);
     gen_dispatcher(input, &calls);
     Ok(quote! { #input })
@@ -33,7 +33,7 @@ fn take_call_attributes(input: &mut ItemImpl) -> Vec<CallFn> {
             ImplItem::Method(m) => m,
             _ => continue,
         };
-        let call_meta = match take_attribute(&mut method.attrs, "call") {
+        let _call_meta = match take_attribute(&mut method.attrs, "call") {
             Some(v) => v.parse_meta().unwrap(),
             _ => continue,
         };
@@ -55,6 +55,8 @@ fn gen_dispatcher(input: &mut ItemImpl, calls: &[CallFn]) {
             Some(v) => v.parse_meta().unwrap(),
             _ => continue,
         };
+        let dispatcher_args = DispatcherArgs::from_meta(&dispatcher_meta).unwrap();
+        let prefix = format_ident!("{}", dispatcher_args.match_arm_prefix);
         let num_ident = match &method.sig.inputs[1] {
             FnArg::Typed(typed) => &typed.pat,
             _ => panic!(""),
@@ -70,7 +72,7 @@ fn gen_dispatcher(input: &mut ItemImpl, calls: &[CallFn]) {
             let args = (0..f.arg_num).map(|i| quote!(#args_ident[#i]));
             let await_suffix = if f.is_async { quote!(.await) } else { quote!() };
             quote! {
-                #pattern => self.#name(#(#args as _),*)#await_suffix,
+                #prefix::#pattern => self.#name(#(#args as _),*)#await_suffix,
             }
         });
         let dispatcher_body = quote! {{
@@ -107,7 +109,9 @@ struct CallDispatchArgs {
 struct CallArgs {}
 
 #[derive(Debug, FromMeta)]
-struct DispatcherArgs {}
+struct DispatcherArgs {
+    match_arm_prefix: String,
+}
 
 /// Useful information of a call function.
 #[derive(Debug)]
